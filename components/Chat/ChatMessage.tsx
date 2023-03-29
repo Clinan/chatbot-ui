@@ -1,13 +1,12 @@
-import { Message } from '@/types';
-import { IconEdit } from '@tabler/icons-react';
+import { Message } from '@/types/chat';
+import { IconCheck, IconCopy, IconEdit } from '@tabler/icons-react';
 import { useTranslation } from 'next-i18next';
-import { FC, useEffect, useRef, useState, memo } from 'react';
+import { FC, memo, useEffect, useRef, useState } from 'react';
 import rehypeMathjax from 'rehype-mathjax';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import { CodeBlock } from '../Markdown/CodeBlock';
 import { MemoizedReactMarkdown } from '../Markdown/MemoizedReactMarkdown';
-import { CopyButton } from './CopyButton';
 
 interface Props {
   message: Message;
@@ -19,7 +18,7 @@ export const ChatMessage: FC<Props> = memo(
   ({ message, messageIndex, onEditMessage }) => {
     const { t } = useTranslation('chat');
     const [isEditing, setIsEditing] = useState<boolean>(false);
-    const [isHovering, setIsHovering] = useState<boolean>(false);
+    const [isTyping, setIsTyping] = useState<boolean>(false);
     const [messageContent, setMessageContent] = useState(message.content);
     const [messagedCopied, setMessageCopied] = useState(false);
 
@@ -47,7 +46,7 @@ export const ChatMessage: FC<Props> = memo(
     };
 
     const handlePressEnter = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+      if (e.key === 'Enter' && !isTyping && !e.shiftKey) {
         e.preventDefault();
         handleEditMessage();
       }
@@ -73,17 +72,15 @@ export const ChatMessage: FC<Props> = memo(
 
     return (
       <div
-        className={`group ${
+        className={`group px-4 ${
           message.role === 'assistant'
             ? 'border-b border-black/10 bg-gray-50 text-gray-800 dark:border-gray-900/50 dark:bg-[#444654] dark:text-gray-100'
             : 'border-b border-black/10 bg-white text-gray-800 dark:border-gray-900/50 dark:bg-[#343541] dark:text-gray-100'
         }`}
         style={{ overflowWrap: 'anywhere' }}
-        onMouseEnter={() => setIsHovering(true)}
-        onMouseLeave={() => setIsHovering(false)}
       >
         <div className="relative m-auto flex gap-4 p-4 text-base md:max-w-2xl md:gap-6 md:py-6 lg:max-w-2xl lg:px-0 xl:max-w-3xl">
-          <div className="min-w-[40px] font-bold">
+          <div className="min-w-[40px] text-right font-bold">
             {message.role === 'assistant' ? t('AI') : t('You')}:
           </div>
 
@@ -94,10 +91,12 @@ export const ChatMessage: FC<Props> = memo(
                   <div className="flex w-full flex-col">
                     <textarea
                       ref={textareaRef}
-                      className="w-full resize-none whitespace-pre-wrap border-none outline-none dark:bg-[#343541]"
+                      className="w-full resize-none whitespace-pre-wrap border-none dark:bg-[#343541]"
                       value={messageContent}
                       onChange={handleInputChange}
                       onKeyDown={handlePressEnter}
+                      onCompositionStart={() => setIsTyping(true)}
+                      onCompositionEnd={() => setIsTyping(false)}
                       style={{
                         fontFamily: 'inherit',
                         fontSize: 'inherit',
@@ -133,24 +132,44 @@ export const ChatMessage: FC<Props> = memo(
                   </div>
                 )}
 
-                {(isHovering || window.innerWidth < 640) && !isEditing && (
+                {(window.innerWidth < 640 || !isEditing) && (
                   <button
-                    className={`absolute ${
+                    className={`absolute translate-x-[1000px] text-gray-500 hover:text-gray-700 focus:translate-x-0 group-hover:translate-x-0 dark:text-gray-400 dark:hover:text-gray-300 ${
                       window.innerWidth < 640
                         ? 'right-3 bottom-1'
-                        : 'right-[-20px] top-[26px]'
-                    }`}
+                        : 'right-0 top-[26px]'
+                    }
+                    `}
+                    onClick={toggleEditing}
                   >
-                    <IconEdit
-                      size={20}
-                      className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                      onClick={toggleEditing}
-                    />
+                    <IconEdit size={20} />
                   </button>
                 )}
               </div>
             ) : (
               <>
+                <div
+                  className={`absolute ${
+                    window.innerWidth < 640
+                      ? 'right-3 bottom-1'
+                      : 'right-0 top-[26px] m-0'
+                  }`}
+                >
+                  {messagedCopied ? (
+                    <IconCheck
+                      size={20}
+                      className="text-green-500 dark:text-green-400"
+                    />
+                  ) : (
+                    <button
+                      className="translate-x-[1000px] text-gray-500 hover:text-gray-700 focus:translate-x-0 group-hover:translate-x-0 dark:text-gray-400 dark:hover:text-gray-300"
+                      onClick={copyOnClick}
+                    >
+                      <IconCopy size={20} />
+                    </button>
+                  )}
+                </div>
+
                 <MemoizedReactMarkdown
                   className="prose dark:prose-invert"
                   remarkPlugins={[remarkGfm, remarkMath]}
@@ -197,13 +216,6 @@ export const ChatMessage: FC<Props> = memo(
                 >
                   {message.content}
                 </MemoizedReactMarkdown>
-
-                {(isHovering || window.innerWidth < 640) && (
-                  <CopyButton
-                    messagedCopied={messagedCopied}
-                    copyOnClick={copyOnClick}
-                  />
-                )}
               </>
             )}
           </div>

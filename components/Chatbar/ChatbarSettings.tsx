@@ -1,11 +1,11 @@
-import { ChatFolder, Conversation } from '@/types';
+import { SupportedExportFormats } from '@/types/export';
 import { IconFileExport, IconMoon, IconSun } from '@tabler/icons-react';
-import { FC } from 'react';
 import { useTranslation } from 'next-i18next';
+import { FC } from 'react';
+import { Import } from '../Settings/Import';
+import { Key } from '../Settings/Key';
+import { SidebarButton } from '../Sidebar/SidebarButton';
 import { ClearConversations } from './ClearConversations';
-import { Import } from './Import';
-import { Key } from './Key';
-import { SidebarButton } from './SidebarButton';
 
 interface Props {
   lightMode: 'light' | 'dark';
@@ -15,13 +15,10 @@ interface Props {
   onApiKeyChange: (apiKey: string) => void;
   onClearConversations: () => void;
   onExportConversations: () => void;
-  onImportConversations: (data: {
-    conversations: Conversation[];
-    folders: ChatFolder[];
-  }) => void;
+  onImportConversations: (data: SupportedExportFormats) => void;
 }
 
-export const SidebarSettings: FC<Props> = ({
+export const ChatbarSettings: FC<Props> = ({
   lightMode,
   apiKey,
   conversationsCount,

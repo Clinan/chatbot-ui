@@ -1,14 +1,21 @@
-import {
-  Conversation,
-  ErrorMessage,
-  KeyValuePair,
-  Message,
-  OpenAIModel,
-} from '@/types';
+import { Conversation, Message } from '@/types/chat';
+import { IconArrowDown } from '@tabler/icons-react';
+import { KeyValuePair } from '@/types/data';
+import { ErrorMessage } from '@/types/error';
+import { OpenAIModel, OpenAIModelID } from '@/types/openai';
+import { Prompt } from '@/types/prompt';
 import { throttle } from '@/utils';
 import { IconClearAll, IconKey, IconSettings } from '@tabler/icons-react';
 import { useTranslation } from 'next-i18next';
-import { FC, memo, MutableRefObject, useEffect, useRef, useState } from 'react';
+import {
+  FC,
+  memo,
+  MutableRefObject,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { Spinner } from '../Global/Spinner';
 import { ChatInput } from './ChatInput';
 import { ChatLoader } from './ChatLoader';
@@ -22,10 +29,11 @@ interface Props {
   models: OpenAIModel[];
   apiKey: string;
   serverSideApiKeyIsSet: boolean;
+  defaultModelId: OpenAIModelID;
   messageIsStreaming: boolean;
   modelError: ErrorMessage | null;
-  messageError: boolean;
   loading: boolean;
+  prompts: Prompt[];
   onSend: (message: Message, deleteCount?: number) => void;
   onUpdateConversation: (
     conversation: Conversation,
@@ -41,10 +49,11 @@ export const Chat: FC<Props> = memo(
     models,
     apiKey,
     serverSideApiKeyIsSet,
+    defaultModelId,
     messageIsStreaming,
     modelError,
-    messageError,
     loading,
+    prompts,
     onSend,
     onUpdateConversation,
     onEditMessage,
@@ -52,12 +61,44 @@ export const Chat: FC<Props> = memo(
   }) => {
     const { t } = useTranslation('chat');
     const [currentMessage, setCurrentMessage] = useState<Message>();
-    const [autoScrollEnabled, setAutoScrollEnabled] = useState(true);
+    const [autoScrollEnabled, setAutoScrollEnabled] = useState<boolean>(true);
     const [showSettings, setShowSettings] = useState<boolean>(false);
+    const [showScrollDownButton, setShowScrollDownButton] =
+      useState<boolean>(false);
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const chatContainerRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+    const scrollToBottom = useCallback(() => {
+      if (autoScrollEnabled) {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        textareaRef.current?.focus();
+      }
+    }, [autoScrollEnabled]);
+
+    const handleScroll = () => {
+      if (chatContainerRef.current) {
+        const { scrollTop, scrollHeight, clientHeight } =
+          chatContainerRef.current;
+        const bottomTolerance = 30;
+
+        if (scrollTop + clientHeight < scrollHeight - bottomTolerance) {
+          setAutoScrollEnabled(false);
+          setShowScrollDownButton(true);
+        } else {
+          setAutoScrollEnabled(true);
+          setShowScrollDownButton(false);
+        }
+      }
+    };
+
+    const handleScrollDown = () => {
+      chatContainerRef.current?.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    };
 
     const handleSettings = () => {
       setShowSettings(!showSettings);
@@ -75,6 +116,8 @@ export const Chat: FC<Props> = memo(
       }
     };
     const throttledScrollDown = throttle(scrollDown, 250);
+
+    // appear scroll down button only when user scrolls up
 
     useEffect(() => {
       throttledScrollDown();
@@ -108,7 +151,7 @@ export const Chat: FC<Props> = memo(
     }, [messagesEndRef]);
 
     return (
-      <div className="overflow-none relative flex-1 bg-white dark:bg-[#343541]">
+      <div className="overflow-hidden relative flex-1 bg-white dark:bg-[#343541]">
         {!(apiKey || serverSideApiKeyIsSet) ? (
           <div className="mx-auto flex h-full w-[300px] flex-col justify-center space-y-6 sm:w-[500px]">
             <div className="mx-auto mb-5 text-gray-800 dark:text-gray-100">
@@ -145,6 +188,7 @@ export const Chat: FC<Props> = memo(
             <div
               className="max-h-full overflow-x-hidden"
               ref={chatContainerRef}
+              onScroll={handleScroll}
             >
               {conversation.messages.length === 0 ? (
                 <>
@@ -164,6 +208,7 @@ export const Chat: FC<Props> = memo(
                         <ModelSelect
                           model={conversation.model}
                           models={models}
+                          defaultModelId={defaultModelId}
                           onModelChange={(model) =>
                             onUpdateConversation(conversation, {
                               key: 'model',
@@ -174,6 +219,7 @@ export const Chat: FC<Props> = memo(
 
                         <SystemPrompt
                           conversation={conversation}
+                          prompts={prompts}
                           onChangePrompt={(prompt) =>
                             onUpdateConversation(conversation, {
                               key: 'prompt',
@@ -189,23 +235,26 @@ export const Chat: FC<Props> = memo(
                 <>
                   <div className="flex justify-center border border-b-neutral-300 bg-neutral-100 py-2 text-sm text-neutral-500 dark:border-none dark:bg-[#444654] dark:text-neutral-200">
                     {t('Model')}: {conversation.model.name}
-                    <IconSettings
+                    <button
                       className="ml-2 cursor-pointer hover:opacity-50"
                       onClick={handleSettings}
-                      size={18}
-                    />
-                    <IconClearAll
+                    >
+                      <IconSettings size={18} />
+                    </button>
+                    <button
                       className="ml-2 cursor-pointer hover:opacity-50"
                       onClick={onClearAll}
-                      size={18}
-                    />
+                    >
+                      <IconClearAll size={18} />
+                    </button>
                   </div>
                   {showSettings && (
-                    <div className="flex flex-col space-y-10 md:max-w-xl md:gap-6 md:py-3 md:pt-6 md:mx-auto lg:max-w-2xl lg:px-0 xl:max-w-3xl">
-                      <div className="flex h-full flex-col space-y-4 border-b md:rounded-lg md:border border-neutral-200 p-4 dark:border-neutral-600">
+                    <div className="flex flex-col space-y-10 md:mx-auto md:max-w-xl md:gap-6 md:py-3 md:pt-6 lg:max-w-2xl lg:px-0 xl:max-w-3xl">
+                      <div className="flex h-full flex-col space-y-4 border-b border-neutral-200 p-4 dark:border-neutral-600 md:rounded-lg md:border">
                         <ModelSelect
                           model={conversation.model}
                           models={models}
+                          defaultModelId={defaultModelId}
                           onModelChange={(model) =>
                             onUpdateConversation(conversation, {
                               key: 'model',
@@ -241,7 +290,9 @@ export const Chat: FC<Props> = memo(
               textareaRef={textareaRef}
               messageIsStreaming={messageIsStreaming}
               conversationIsEmpty={conversation.messages.length === 0}
+              messages={conversation.messages}
               model={conversation.model}
+              prompts={prompts}
               onSend={(message) => {
                 setCurrentMessage(message);
                 onSend(message);
@@ -253,6 +304,16 @@ export const Chat: FC<Props> = memo(
               }}
             />
           </>
+        )}
+        {showScrollDownButton && (
+          <div className="absolute bottom-0 right-0 mb-4 mr-4 pb-20">
+            <button
+              className="flex h-7 w-7 items-center justify-center rounded-full bg-white shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-[#515152d7]"
+              onClick={handleScrollDown}
+            >
+              <IconArrowDown size={18} />
+            </button>
+          </div>
         )}
       </div>
     );
