@@ -5,7 +5,7 @@ COPY package*.json ./
 
 # ---- Dependencies ----
 FROM base AS dependencies
-RUN npm --registry=http://registry.npmmirror.com ci
+RUN npm --registry=http://registry.npmmirror.com install
 
 # ---- Build ----
 FROM dependencies AS build
